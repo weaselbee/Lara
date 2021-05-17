@@ -102,7 +102,6 @@ def main():
 
         # receive message
         buffer, addr = sock.recvfrom(1400)
-
         # check if anser came in
         if buffer:
             break
@@ -113,7 +112,7 @@ def main():
             sys.exit(-1)
 
     # Textoutput of CL_CON_REQ
-    print('[STATUS] Connecting as', user, 'to', address, '(%h):', port, '.')
+    print('[STATUS] Connecting as ' + user + ' to ' + address + ' ' + socket.gethostbyaddr(address)[0] + ' ' + str(port) + '.')
     
     # unpack the answer of the server, if the connection is accepted
     try:
@@ -127,28 +126,23 @@ def main():
         sys.exit(-1)
     
     new_port = SV_CON_REP[2]
-    print('[STATUS] Connection accepted. Please use port ', new_port ,' for further communication.')
+    print('[STATUS] Connection accepted. Please use port', new_port, 'for further communication.')
 
-    new_message = struct.pack('!B', 5)
-    sock.sendto(new_message, (address, new_port))
+    CL_PING_REP = struct.pack('!B', 5)
+    sock.sendto(CL_PING_REP, (address, new_port))
 
-    count = 0
+    sock.settimeout(3 * 4)
     while True:
-        try:
-            buf, usr_len, usr_name = sock.recvfrom(1400)
-            break
-        except:
-            count = count + 1
-            if count >= 10:
-                print('Waiting for answer took too long')
-                sys.exit(-1)
-            continue
-    
-    #try:
-    SV_CON_AMSG = struct.unpack('!BH{}s'.format(20), buf)
-    #except:
-     #   print('Couldnt unpack')
-    print(SV_CON_AMSG)
+
+        buffer, addr = sock.recvfrom(1400)
+
+        id = struct.unpack('!B', buffer[0:1])[0]
+        if id == 3:
+            usr_len  = struct.unpack('!H', buffer[1:3])[0]
+            usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
+            print('[CHAT] Hi, my name is ' + usr_name.decode(encoding='utf-8') + '!')
+
+
     # HIER WEITER MACHEN LARA!!!! nicht nach dem CLOSE!!!
     sock.close()
 
