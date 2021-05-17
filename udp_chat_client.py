@@ -91,8 +91,6 @@ def main():
 
     # struct.pack(...) returns a bytes object
     CL_CON_REQ = struct.pack('!BH{}s'.format(len(user)), 1, len(user),bytes(user, encoding='utf-8'))
-    
-    print(CL_CON_REQ)
 
     # timeout of four seconds
     sock.settimeout(4)
@@ -111,25 +109,46 @@ def main():
         
         # third timeout
         if i == 2:
-            print('[STATUS] Connection rejected. Serverdoes not answer.')
+            print('[STATUS] Connection rejected. Server does not answer.')
             sys.exit(-1)
 
-    # TODO print CL_CON_REQ textoutput!
-
+    # Textoutput of CL_CON_REQ
+    print('[STATUS] Connecting as', user, 'to', address, '(%h):', port, '.')
     
+    # unpack the answer of the server, if the connection is accepted
     try:
         SV_CON_REP = struct.unpack('!BBH', buffer)
     except:
-        print('Connection rejected. Serverdoes not answer.')
+        print('[STATUS] Connection rejected by server.')
         sys.exit(-1)
 
     if SV_CON_REP[1] == 0:
-        print('Connection rejected. Serverdoes not answer.')
+        print('[STATUS] Connection rejected by server.')
         sys.exit(-1)
-
+    
     new_port = SV_CON_REP[2]
-    print(SV_CON_REP)
+    print('[STATUS] Connection accepted. Please use port ', new_port ,' for further communication.')
 
+    new_message = struct.pack('!B', 5)
+    sock.sendto(new_message, (address, new_port))
+
+    count = 0
+    while True:
+        try:
+            buf, usr_len, usr_name = sock.recvfrom(1400)
+            break
+        except:
+            count = count + 1
+            if count >= 10:
+                print('Waiting for answer took too long')
+                sys.exit(-1)
+            continue
+    
+    #try:
+    SV_CON_AMSG = struct.unpack('!BH{}s'.format(20), buf)
+    #except:
+     #   print('Couldnt unpack')
+    print(SV_CON_AMSG)
     # HIER WEITER MACHEN LARA!!!! nicht nach dem CLOSE!!!
     sock.close()
 
