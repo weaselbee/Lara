@@ -14,6 +14,7 @@ def help():
     + '--serv <addr>: Hostname/IPv4 address which should look like: xxx.xxx.xxx.xxx \n'
     + '--port <port>: Port number. Only numeric characters are allowed with a maximum of 65535. \n')
 
+# task 1.2
 def starting_the_client():
     # check number of arguments
     if len(sys.argv) != 7:
@@ -87,6 +88,7 @@ def starting_the_client():
 
     return user, ipv4, port
 
+# task 1.3
 def connection_setup(sock, user, ipv4, port):
     # struct.pack(...) returns a bytes object
     CL_CON_REQ = struct.pack('!BH{}s'.format(len(user)), 1, len(user),bytes(user, encoding='utf-8'))
@@ -129,6 +131,44 @@ def connection_setup(sock, user, ipv4, port):
 
     return new_port
 
+# task 1.5
+def connection_teardown(sock, ipv4, new_port):
+
+    read_descriptor = []
+    read_descriptor.append(sock.fileno())
+    read_descriptor.append(sys.stdin.fileno())
+
+    write_descriptor = []
+    exceptions_descriptor = []
+    in_ready, out_ready, except_ready = select.select(read_descriptor,
+                                                        write_descriptor,
+                                                        exceptions_descriptor)
+    for a in in_ready:
+        if a is sock.fileno():
+            break
+        if a is sys.stdin.fileno():
+            data = input()
+
+            # teardown, if the user wants to disconnect
+            if data == '/disconnect':
+                CL_DISC_REQ = struct.pack('!B', 7)
+                
+                # timeout of five seconds
+                sock.settimeout(5)
+
+                # try 2 times, otherwise the teardown failed
+                for i in range(3):
+                    sock.sendto(CL_DISC_REQ, (ipv4, new_port))
+                    buffer, addr = sock.recvfrom(1400)
+
+                    if buffer:
+                        id = struct.unpack('!B', buffer[0:1])[0]
+                        if id == 6:
+                            print('[STATUS] Connection was terminated successfully.')
+                            sys.exit(-1)
+                    if i == 2:
+                        print('[STATUS] Could not tear down the connection. Timeout.')
+                        sys.exit(-1)
 
 def main():
 
@@ -173,38 +213,8 @@ def main():
             usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
             print('[CHAT] ' + usr_name.decode(encoding='utf-8') + ' left the chat.')
 
-        read_descriptor = []
-        read_descriptor.append(sock.fileno())
-        read_descriptor.append(sys.stdin.fileno())
-
-        write_descriptor = []
-        exceptions_descriptor = []
-        in_ready, out_ready, except_ready = select.select(read_descriptor,
-                                                          write_descriptor,
-                                                          exceptions_descriptor)
-        for a in in_ready:
-            if a is sock.fileno():
-                break
-            if a is sys.stdin.fileno():
-                data = input()
-                if data == '/disconnect':
-                    CL_DISC_REQ = struct.pack('!B', 7)
-                    
-                    # timeout of five seconds
-                    sock.settimeout(5)
-
-                    for i in range(3):
-                        sock.sendto(CL_DISC_REQ, (ipv4, new_port))
-                        buffer, addr = sock.recvfrom(1400)
-
-                        if buffer:
-                            id = struct.unpack('!B', buffer[0:1])[0]
-                            if id == 6:
-                                print('[STATUS] Connection was terminated successfully.')
-                                sys.exit(-1)
-                        if i == 2:
-                            print('[STATUS] Could not tear down the connection. Timeout.')
-                            sys.exit(-1)
+        connection_teardown(sock, ipv4, new_port)
+        
 
     # HIER WEITER MACHEN LARA!!!! nicht nach dem CLOSE!!!
     sock.close()
