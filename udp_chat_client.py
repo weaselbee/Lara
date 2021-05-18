@@ -135,8 +135,19 @@ def main():
     while True:
 
         buffer, addr = sock.recvfrom(1400)
-
+        
+        # unpack the received message to get the message type
         id = struct.unpack('!B', buffer[0:1])[0]
+
+        # the server sent a ping and expects ping as answer
+        if id == 4:
+            sock.sendto(CL_PING_REP, (address, new_port))
+
+        # the client lost the connection to the server and gets removed
+        if id == 6:
+            print('[STATUS] Lost connection to the server. Timeout.')
+
+        # an other user connected to the chat
         if id == 3:
             usr_len  = struct.unpack('!H', buffer[1:3])[0]
             usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
