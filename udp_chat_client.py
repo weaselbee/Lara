@@ -159,6 +159,8 @@ def connection_teardown(sock, ipv4, new_port):
                 # try 2 times, otherwise the teardown failed
                 for i in range(3):
                     sock.sendto(CL_DISC_REQ, (ipv4, new_port))
+
+                    print('[STATUS] Disconnecting from ' + socket.gethostbyaddr(ipv4)[0] + ' (' + ipv4 + ').')
                     buffer, addr = sock.recvfrom(1400)
 
                     if buffer:
