@@ -3,6 +3,7 @@ import socket
 import struct
 import ipaddress
 import socketserver
+import select
 
 # method to print a usage
 def help():
@@ -13,9 +14,7 @@ def help():
     + '--serv <addr>: Hostname/IPv4 address which should look like: xxx.xxx.xxx.xxx \n'
     + '--port <port>: Port number. Only numeric characters are allowed with a maximum of 65535. \n')
 
-
-def main():
-
+def starting_the_client():
     # check number of arguments
     if len(sys.argv) != 7:
         help()
@@ -46,19 +45,19 @@ def main():
         
         # try to create an ip address 
         try:
-            address = ipaddress.ip_address(sys.argv[4])
+            ipv4 = ipaddress.ip_address(sys.argv[4])
 
         except:
             help()
             sys.exit(-1)
 
         # only an ipv4 address is valid
-        if address.version != 4:
+        if ipv4.version != 4:
             help()
             sys.exit(-1)
         
         # the address must be a string
-        address = sys.argv[4]
+        ipv4 = sys.argv[4]
 
     else:
         help()
@@ -86,9 +85,9 @@ def main():
         help()
         sys.exit(-1)
 
-    # create UDP socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    return user, ipv4, port
 
+def connection_setup(sock, user, ipv4, port):
     # struct.pack(...) returns a bytes object
     CL_CON_REQ = struct.pack('!BH{}s'.format(len(user)), 1, len(user),bytes(user, encoding='utf-8'))
 
@@ -98,7 +97,7 @@ def main():
     for i in range(3):
 
         # send message
-        sock.sendto(CL_CON_REQ, (address,port))
+        sock.sendto(CL_CON_REQ, (ipv4,port))
 
         # receive message
         buffer, addr = sock.recvfrom(1400)
@@ -112,7 +111,7 @@ def main():
             sys.exit(-1)
 
     # Textoutput of CL_CON_REQ
-    print('[STATUS] Connecting as ' + user + ' to ' + address + ' ' + socket.gethostbyaddr(address)[0] + ' ' + str(port) + '.')
+    print('[STATUS] Connecting as ' + user + ' to ' + ipv4 + ' ' + socket.gethostbyaddr(ipv4)[0] + ' ' + str(port) + '.')
     
     # unpack the answer of the server, if the connection is accepted
     try:
@@ -128,24 +127,32 @@ def main():
     new_port = SV_CON_REP[2]
     print('[STATUS] Connection accepted. Please use port', new_port, 'for further communication.')
 
+    return new_port
+
+
+def main():
+
+    user, ipv4, port = starting_the_client()
+
+    # create UDP socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    try:
+        new_port = connection_setup(sock, user, ipv4, port)
+    except:
+        sys.exit(-1)
+    
+    # send a first ping because the server needs a first message
     CL_PING_REP = struct.pack('!B', 5)
-    sock.sendto(CL_PING_REP, (address, new_port))
+    sock.sendto(CL_PING_REP, (ipv4, new_port))
 
-    sock.settimeout(3 * 4)
     while True:
-
+        sock.settimeout(3 * 4)
         buffer, addr = sock.recvfrom(1400)
         
         # unpack the received message to get the message type
         id = struct.unpack('!B', buffer[0:1])[0]
 
-        # the server sent a ping and expects ping as answer
-        if id == 4:
-            sock.sendto(CL_PING_REP, (address, new_port))
-
-        # the client lost the connection to the server and gets removed
-        if id == 6:
-            print('[STATUS] Lost connection to the server. Timeout.')
 
         # an other user connected to the chat
         if id == 3:
@@ -153,6 +160,51 @@ def main():
             usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
             print('[CHAT] Hi, my name is ' + usr_name.decode(encoding='utf-8') + '!')
 
+        # the server sent a ping and expects ping as answer
+        if id == 4:
+            sock.sendto(CL_PING_REP, (ipv4, new_port))
+
+        # the client lost the connection to the server and gets removed
+        if id == 6:
+            print('[STATUS] Lost connection to the server. Timeout.')
+
+        if id == 8:
+            usr_len  = struct.unpack('!H', buffer[1:3])[0]
+            usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
+            print('[CHAT] ' + usr_name.decode(encoding='utf-8') + ' left the chat.')
+
+        read_descriptor = []
+        read_descriptor.append(sock.fileno())
+        read_descriptor.append(sys.stdin.fileno())
+
+        write_descriptor = []
+        exceptions_descriptor = []
+        in_ready, out_ready, except_ready = select.select(read_descriptor,
+                                                          write_descriptor,
+                                                          exceptions_descriptor)
+        for a in in_ready:
+            if a is sock.fileno():
+                break
+            if a is sys.stdin.fileno():
+                data = input()
+                if data == '/disconnect':
+                    CL_DISC_REQ = struct.pack('!B', 7)
+                    
+                    # timeout of five seconds
+                    sock.settimeout(5)
+
+                    for i in range(3):
+                        sock.sendto(CL_DISC_REQ, (ipv4, new_port))
+                        buffer, addr = sock.recvfrom(1400)
+
+                        if buffer:
+                            id = struct.unpack('!B', buffer[0:1])[0]
+                            if id == 6:
+                                print('[STATUS] Connection was terminated successfully.')
+                                sys.exit(-1)
+                        if i == 2:
+                            print('[STATUS] Could not tear down the connection. Timeout.')
+                            sys.exit(-1)
 
     # HIER WEITER MACHEN LARA!!!! nicht nach dem CLOSE!!!
     sock.close()
