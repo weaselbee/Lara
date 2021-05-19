@@ -131,46 +131,60 @@ def connection_setup(sock, user, ipv4, port):
 
     return new_port
 
+#task 1.4
+def connection_monitoring(sock, ipv4, new_port):
+    sock.settimeout(3 * 4)
+    CL_PING_REP = struct.pack('!B', 5)
+    buffer, addr = sock.recvfrom(1400)
+    
+    # unpack the received message to get the message type
+    id = struct.unpack('!B', buffer[0:1])[0]
+
+
+    # an other user connected to the chat
+    if id == 3:
+        usr_len  = struct.unpack('!H', buffer[1:3])[0]
+        usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
+        print('[CHAT] Hi, my name is ' + usr_name.decode(encoding='utf-8') + '!')
+
+    # the server sent a ping and expects ping as answer
+    if id == 4:
+        sock.sendto(CL_PING_REP, (ipv4, new_port))
+
+    # the client lost the connection to the server and gets removed
+    if id == 6:
+        print('[STATUS] Lost connection to the server. Timeout.')
+
+    if id == 8:
+        usr_len  = struct.unpack('!H', buffer[1:3])[0]
+        usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
+        print('[CHAT] ' + usr_name.decode(encoding='utf-8') + ' left the chat.')
+
 # task 1.5
-def connection_teardown(sock, ipv4, new_port):
+def connection_teardown(sock, ipv4, new_port):        
+    data = input()
+    # teardown, if the user wants to disconnect
+    if data == '/disconnect':
+        CL_DISC_REQ = struct.pack('!B', 7)
+        
+        # timeout of five seconds
+        sock.settimeout(5)
 
-    read_descriptor = []
-    read_descriptor.append(sock.fileno())
-    read_descriptor.append(sys.stdin.fileno())
+        # try 2 times, otherwise the teardown failed
+        for i in range(3):
+            sock.sendto(CL_DISC_REQ, (ipv4, new_port))
 
-    write_descriptor = []
-    exceptions_descriptor = []
-    in_ready, out_ready, except_ready = select.select(read_descriptor,
-                                                        write_descriptor,
-                                                        exceptions_descriptor)
-    for a in in_ready:
-        if a is sock.fileno():
-            break
-        if a is sys.stdin.fileno():
-            data = input()
+            print('[STATUS] Disconnecting from ' + socket.gethostbyaddr(ipv4)[0] + ' (' + ipv4 + ').')
+            buffer, addr = sock.recvfrom(1400)
 
-            # teardown, if the user wants to disconnect
-            if data == '/disconnect':
-                CL_DISC_REQ = struct.pack('!B', 7)
-                
-                # timeout of five seconds
-                sock.settimeout(5)
-
-                # try 2 times, otherwise the teardown failed
-                for i in range(3):
-                    sock.sendto(CL_DISC_REQ, (ipv4, new_port))
-
-                    print('[STATUS] Disconnecting from ' + socket.gethostbyaddr(ipv4)[0] + ' (' + ipv4 + ').')
-                    buffer, addr = sock.recvfrom(1400)
-
-                    if buffer:
-                        id = struct.unpack('!B', buffer[0:1])[0]
-                        if id == 6:
-                            print('[STATUS] Connection was terminated successfully.')
-                            sys.exit(-1)
-                    if i == 2:
-                        print('[STATUS] Could not tear down the connection. Timeout.')
-                        sys.exit(-1)
+            if buffer:
+                id = struct.unpack('!B', buffer[0:1])[0]
+                if id == 6:
+                    print('[STATUS] Connection was terminated successfully.')
+                    sys.exit(-1)
+            if i == 2:
+                print('[STATUS] Could not tear down the connection. Timeout.')
+                sys.exit(-1)
 
 def main():
 
@@ -189,33 +203,22 @@ def main():
     sock.sendto(CL_PING_REP, (ipv4, new_port))
 
     while True:
-        sock.settimeout(3 * 4)
-        buffer, addr = sock.recvfrom(1400)
-        
-        # unpack the received message to get the message type
-        id = struct.unpack('!B', buffer[0:1])[0]
+        read_descriptor = []
+        read_descriptor.append(sock.fileno())
+        read_descriptor.append(sys.stdin.fileno())
 
+        write_descriptor = []
+        exceptions_descriptor = []
+        in_ready, out_ready, except_ready = select.select(read_descriptor,
+                                                          write_descriptor,
+                                                          exceptions_descriptor)
 
-        # an other user connected to the chat
-        if id == 3:
-            usr_len  = struct.unpack('!H', buffer[1:3])[0]
-            usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
-            print('[CHAT] Hi, my name is ' + usr_name.decode(encoding='utf-8') + '!')
-
-        # the server sent a ping and expects ping as answer
-        if id == 4:
-            sock.sendto(CL_PING_REP, (ipv4, new_port))
-
-        # the client lost the connection to the server and gets removed
-        if id == 6:
-            print('[STATUS] Lost connection to the server. Timeout.')
-
-        if id == 8:
-            usr_len  = struct.unpack('!H', buffer[1:3])[0]
-            usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
-            print('[CHAT] ' + usr_name.decode(encoding='utf-8') + ' left the chat.')
-
-        connection_teardown(sock, ipv4, new_port)
+        for a in in_ready:
+            if a is sock.fileno(): 
+                connection_monitoring(sock, ipv4, new_port)
+            
+            if a is sys.stdin.fileno():
+                connection_teardown(sock, ipv4, new_port)
         
 
     # HIER WEITER MACHEN LARA!!!! nicht nach dem CLOSE!!!
