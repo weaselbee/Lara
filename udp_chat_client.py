@@ -14,6 +14,26 @@ def help():
     + '--serv <addr>: Hostname/IPv4 address which should look like: xxx.xxx.xxx.xxx \n'
     + '--port <port>: Port number. Only numeric characters are allowed with a maximum of 65535. \n')
 
+def username_check(username):
+    name_length  = True
+    alphanumeric = True
+
+    # constrain user names to a maximum of 20 characters
+    if len(username) > 20:
+        name_length = False
+
+    # check each character of user for alphanumeric chars
+    for c in username:
+        if not ((ord(c) >= 65 and ord(c) <= 90) 
+            or  (ord(c) >= 97 and ord(c) <= 122)
+            or  (ord(c) >= 48 and ord(c) <= 57)):
+            alphanumeric = False
+    
+    if name_length and alphanumeric:
+        return True
+    else:
+        return False
+
 # task 1.2
 def starting_the_client():
     # check number of arguments
@@ -25,18 +45,10 @@ def starting_the_client():
     if sys.argv[1] == '--user':
         user = sys.argv[2]
 
-        # constrain user names to a maximum of 20 characters
-        if len(user) > 20:
+        if not username_check(user):
             help()
             sys.exit(-1)
 
-        # check each character of user for alphanumeric chars
-        for c in user:
-            if not ((ord(c) >= 65 and ord(c) <= 90) 
-                or  (ord(c) >= 97 and ord(c) <= 122)
-                or  (ord(c) >= 48 and ord(c) <= 57)):
-                help()
-                sys.exit(-1)
     else:
         help()
         sys.exit(-1)
@@ -91,7 +103,7 @@ def starting_the_client():
 # task 1.3
 def connection_setup(sock, user, ipv4, port):
     # struct.pack(...) returns a bytes object
-    CL_CON_REQ = struct.pack('!BH{}s'.format(len(user)), 1, len(user),bytes(user, encoding='utf-8'))
+    CL_CON_REQ = struct.pack('!BH{}s'.format(len(user)), 1, len(user), bytes(user, encoding='utf-8'))
 
     # timeout of four seconds
     sock.settimeout(4)
@@ -103,7 +115,7 @@ def connection_setup(sock, user, ipv4, port):
 
         # receive message
         buffer, addr = sock.recvfrom(1400)
-        # check if anser came in
+        # check if answer came in
         if buffer:
             break
         
@@ -155,6 +167,7 @@ def connection_monitoring(sock, ipv4, new_port):
     if id == 6:
         print('[STATUS] Lost connection to the server. Timeout.')
 
+    # an user left the chat with '/disconnect'
     if id == 8:
         usr_len  = struct.unpack('!H', buffer[1:3])[0]
         usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
@@ -162,29 +175,51 @@ def connection_monitoring(sock, ipv4, new_port):
 
 # task 1.5
 def connection_teardown(sock, ipv4, new_port):        
-    data = input()
-    # teardown, if the user wants to disconnect
-    if data == '/disconnect':
-        CL_DISC_REQ = struct.pack('!B', 7)
-        
-        # timeout of five seconds
-        sock.settimeout(5)
+    CL_DISC_REQ = struct.pack('!B', 7)
+    
+    # timeout of five seconds
+    sock.settimeout(5)
 
-        # try 2 times, otherwise the teardown failed
-        for i in range(3):
-            sock.sendto(CL_DISC_REQ, (ipv4, new_port))
+    # try 2 times, otherwise the teardown failed
+    for i in range(3):
+        sock.sendto(CL_DISC_REQ, (ipv4, new_port))
 
-            print('[STATUS] Disconnecting from ' + socket.gethostbyaddr(ipv4)[0] + ' (' + ipv4 + ').')
-            buffer, addr = sock.recvfrom(1400)
+        print('[STATUS] Disconnecting from ' + socket.gethostbyaddr(ipv4)[0] + ' (' + ipv4 + ').')
+        buffer, addr = sock.recvfrom(1400)
 
-            if buffer:
-                id = struct.unpack('!B', buffer[0:1])[0]
-                if id == 6:
-                    print('[STATUS] Connection was terminated successfully.')
-                    sys.exit(-1)
-            if i == 2:
-                print('[STATUS] Could not tear down the connection. Timeout.')
+        if buffer:
+            id = struct.unpack('!B', buffer[0:1])[0]
+            if id == 6:
+                print('[STATUS] Connection was terminated successfully.')
                 sys.exit(-1)
+        if i == 2:
+            print('[STATUS] Could not tear down the connection. Timeout.')
+            sys.exit(-1)
+
+# task 1.6
+def user_query(sock, ipv4, new_port, name):
+
+    # username the user asked for
+    CL_USER_REQ = struct.pack('!BH{}s'.format(len(name)), 9, len(name), bytes(name, encoding='utf-8'))
+    sock.sendto(CL_USER_REQ, (ipv4, new_port))
+    print('[STATUS] Asking for availability of ' + name + '.')
+    buffer, addr = sock.recvfrom(1400)
+    
+    # answer of the server
+    SV_USER_REP = struct.unpack('!BB', buffer[0:2])
+    
+    # the username is not connected to the server
+    if SV_USER_REP[1] == 0 and SV_USER_REP[0] == 10:
+        print('[STATUS] User', name, 'was not found on this server.')
+    
+    # the username is connected
+    elif SV_USER_REP[1] == 1 and SV_USER_REP[0] == 10:
+        name_len = struct.unpack('!H', buffer[2:4])[0]
+        user_name = struct.unpack('!H{}s'.format(name_len), buffer[2:])
+        user_name = user_name[1]
+        print('[STATUS] User', user_name.decode(encoding='utf-8'), 'is here!')
+
+
 
 def main():
 
@@ -218,7 +253,23 @@ def main():
                 connection_monitoring(sock, ipv4, new_port)
             
             if a is sys.stdin.fileno():
-                connection_teardown(sock, ipv4, new_port)
+                data = input()
+                if data == '/disconnect':
+                    connection_teardown(sock, ipv4, new_port)
+                else:
+                    try:
+                        data = data.split(' ')
+                        search = data[0]
+                        name   = data[1]
+
+                        if search == '/search':
+                            if username_check(name):
+                                user_query(sock, ipv4, new_port, name)
+                            else:
+                                print('[WARNING] Invalid username was entered.')
+                    except:
+                        # ignore invalid commands
+                        pass
         
 
     # HIER WEITER MACHEN LARA!!!! nicht nach dem CLOSE!!!
