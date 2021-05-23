@@ -124,6 +124,12 @@ def connection_setup(sock, user, ipv4, port):
             print('[STATUS] Connection rejected. Server does not answer.')
             sys.exit(-1)
 
+        # server detected error
+        if id == 13:
+            msg_len  = struct.unpack('!I', buffer[1:5])[0]
+            msg      = struct.unpack('!{}s'.format(msg_len), buffer[5:])[0]
+            print('[SERVER] ' + msg.decode(encoding='utf-8'))
+
     # Textoutput of CL_CON_REQ
     print('[STATUS] Connecting as ' + user + ' to ' + ipv4 + ' ' + socket.gethostbyaddr(ipv4)[0] + ' ' + str(port) + '.')
     
@@ -152,7 +158,6 @@ def connection_monitoring(sock, ipv4, new_port):
     # unpack the received message to get the message type
     id = struct.unpack('!B', buffer[0:1])[0]
 
-
     # an other user connected to the chat
     if id == 3:
         usr_len  = struct.unpack('!H', buffer[1:3])[0]
@@ -180,6 +185,12 @@ def connection_monitoring(sock, ipv4, new_port):
         msg_len  = struct.unpack('!I', buffer[(3 + usr_len):(3 + usr_len + 4)])[0]
         msg      = struct.unpack('!{}s'.format(msg_len), buffer[(3 + usr_len + 4):])[0]
         print('[CHAT] <' + usr_name.decode(encoding='utf-8') + '>: ' + msg.decode(encoding='utf-8'))
+
+    # server detected error
+    if id == 13:
+        msg_len  = struct.unpack('!I', buffer[1:5])[0]
+        msg      = struct.unpack('!{}s'.format(msg_len), buffer[5:])[0]
+        print('[SERVER] ' + msg.decode(encoding='utf-8'))
 
 # task 1.5
 def connection_teardown(sock, ipv4, new_port):        
