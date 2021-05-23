@@ -173,6 +173,14 @@ def connection_monitoring(sock, ipv4, new_port):
         usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
         print('[CHAT] <' + usr_name.decode(encoding='utf-8') + '> left the chat.')
 
+    # receive messages from other useres to chat
+    if id == 12:
+        usr_len  = struct.unpack('!H', buffer[1:3])[0]
+        usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:(3 + usr_len)])[0] 
+        msg_len  = struct.unpack('!I', buffer[(3 + usr_len):(3 + usr_len + 4)])[0]
+        msg      = struct.unpack('!{}s'.format(msg_len), buffer[(3 + usr_len + 4):])[0]
+        print('[CHAT] <' + usr_name.decode(encoding='utf-8') + '>: ' + msg.decode(encoding='utf-8'))
+
 # task 1.5
 def connection_teardown(sock, ipv4, new_port):        
     CL_DISC_REQ = struct.pack('!B', 7)
@@ -262,7 +270,8 @@ def main():
                             data = data.split(' ')
                             search = data[0]
                             name   = data[1]
-
+                            
+                            # command to ask for other users on the server
                             if search == '/search':
                                 if username_check(name):
                                     user_query(sock, ipv4, new_port, name)
@@ -272,8 +281,12 @@ def main():
                             # ignore invalid commands
                             pass
                 else:
-                    continue
-
+                    # message to the chat
+                    if sys.getsizeof(data) <= 1400:
+                        CL_MSG = struct.pack('!BI{}s'.format(len(data)), 11, len(data), bytes(data, encoding='utf-8'))
+                        sock.sendto(CL_MSG, (ipv4, new_port))
+                    else:
+                        print('[WARNING] Message is too big.')
     # HIER WEITER MACHEN LARA!!!! nicht nach dem CLOSE!!!
     sock.close()
 
