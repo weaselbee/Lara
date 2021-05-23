@@ -157,7 +157,7 @@ def connection_monitoring(sock, ipv4, new_port):
     if id == 3:
         usr_len  = struct.unpack('!H', buffer[1:3])[0]
         usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
-        print('[CHAT] Hi, my name is ' + usr_name.decode(encoding='utf-8') + '!')
+        print('[CHAT] Hi, my name is <' + usr_name.decode(encoding='utf-8') + '>!')
 
     # the server sent a ping and expects ping as answer
     if id == 4:
@@ -171,7 +171,7 @@ def connection_monitoring(sock, ipv4, new_port):
     if id == 8:
         usr_len  = struct.unpack('!H', buffer[1:3])[0]
         usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
-        print('[CHAT] ' + usr_name.decode(encoding='utf-8') + ' left the chat.')
+        print('[CHAT] <' + usr_name.decode(encoding='utf-8') + '> left the chat.')
 
 # task 1.5
 def connection_teardown(sock, ipv4, new_port):        
@@ -254,23 +254,25 @@ def main():
             
             if a is sys.stdin.fileno():
                 data = input()
-                if data == '/disconnect':
-                    connection_teardown(sock, ipv4, new_port)
-                else:
-                    try:
-                        data = data.split(' ')
-                        search = data[0]
-                        name   = data[1]
+                if data[0] == '/':
+                    if data == '/disconnect':
+                        connection_teardown(sock, ipv4, new_port)
+                    else:
+                        try:
+                            data = data.split(' ')
+                            search = data[0]
+                            name   = data[1]
 
-                        if search == '/search':
-                            if username_check(name):
-                                user_query(sock, ipv4, new_port, name)
-                            else:
-                                print('[WARNING] Invalid username was entered.')
-                    except:
-                        # ignore invalid commands
-                        pass
-        
+                            if search == '/search':
+                                if username_check(name):
+                                    user_query(sock, ipv4, new_port, name)
+                                else:
+                                    print('[WARNING] Invalid username was entered.')
+                        except:
+                            # ignore invalid commands
+                            pass
+                else:
+                    continue
 
     # HIER WEITER MACHEN LARA!!!! nicht nach dem CLOSE!!!
     sock.close()
