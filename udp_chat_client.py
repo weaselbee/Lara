@@ -7,7 +7,8 @@ import select
 
 # method to print a usage
 def help():
-    print('Command line call: \n'
+    print('Usage: \n'
+    + 'Command line call: \n'
     + 'python3 udp_chat_client.py --user <user> --serv <addr> --port <port> \n'
     + 'With: \n'
     + '--user <user>: User name. Only alphanumeric characters are allowed, with a maximum of 20 characters. \n'
@@ -48,6 +49,9 @@ def starting_the_client():
         if not username_check(user):
             help()
             sys.exit(-1)
+    elif sys.argv[1] == '--help':
+        help()
+        sys.exit(-1)
 
     else:
         help()
@@ -109,29 +113,20 @@ def connection_setup(sock, user, ipv4, port):
     sock.settimeout(4)
 
     for i in range(3):
-
         # send message
-        sock.sendto(CL_CON_REQ, (ipv4,port))
+        sock.sendto(CL_CON_REQ, (ipv4, port))
 
-        # receive message
-        buffer, addr = sock.recvfrom(1400)
-        # check if answer came in
-        if buffer:
+        # Textoutput of CL_CON_REQ
+        print('[STATUS] Connecting as ' + user + ' to ' + str(ipv4) + ' (' + socket.gethostbyaddr(ipv4)[0] + '): ' + str(port) + '.')
+        try:
+            # receive message
+            buffer, addr = sock.recvfrom(1400)
             break
-        
-        # third timeout
-        if i == 2:
-            print('[STATUS] Connection rejected. Server does not answer.')
-            sys.exit(-1)
-
-        # server detected error
-        if id == 13:
-            msg_len  = struct.unpack('!I', buffer[1:5])[0]
-            msg      = struct.unpack('!{}s'.format(msg_len), buffer[5:])[0]
-            print('[SERVER] ' + msg.decode(encoding='utf-8'))
-
-    # Textoutput of CL_CON_REQ
-    print('[STATUS] Connecting as ' + user + ' to ' + ipv4 + ' ' + socket.gethostbyaddr(ipv4)[0] + ' ' + str(port) + '.')
+        except:
+            if i == 2: # third timeout
+                print('[STATUS] Connection rejected. Server does not answer.')
+                sys.exit(0)
+            
     
     # unpack the answer of the server, if the connection is accepted
     try:
@@ -140,13 +135,24 @@ def connection_setup(sock, user, ipv4, port):
         print('[STATUS] Connection rejected by server.')
         sys.exit(-1)
 
-    if SV_CON_REP[1] == 0:
-        print('[STATUS] Connection rejected by server.')
-        sys.exit(-1)
+    # if SV_CON_REP[1] == 0:
+    #     print('[STATUS] Connection rejected by server.')
+    #     sys.exit(-1)
+
+    # server detected error
+    if SV_CON_REP[1] == 13:
+        msg_len  = struct.unpack('!I', buffer[1:5])[0]
+        msg      = struct.unpack('!{}s'.format(msg_len), buffer[5:])[0]
+        print('[SERVER] ' + msg.decode(encoding='utf-8'))
     
     new_port = SV_CON_REP[2]
-    print('[STATUS] Connection accepted. Please use port', new_port, 'for further communication.')
 
+    print('[STATUS] Connection accepted. Please use port ' + str(new_port) + ' for further communication.')
+
+    # send a first ping because the server needs a first message
+    CL_PING_REP = struct.pack('!B', 5)
+    sock.sendto(CL_PING_REP, (ipv4, new_port))
+  
     return new_port
 
 #task 1.4
@@ -247,14 +253,12 @@ def main():
     # create UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    try:
-        new_port = connection_setup(sock, user, ipv4, port)
-    except:
-        sys.exit(-1)
+    #try:
+    new_port = connection_setup(sock, user, ipv4, port)
+    #except:
+    #    sys.exit(-1)
     
-    # send a first ping because the server needs a first message
-    CL_PING_REP = struct.pack('!B', 5)
-    sock.sendto(CL_PING_REP, (ipv4, new_port))
+    
 
     while True:
         read_descriptor = []
