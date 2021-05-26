@@ -36,72 +36,81 @@ def username_check(username):
 
 # task 1.2
 def starting_the_client():
+
+    # no user input or user looks for help
+    if len(sys.argv) == 1:
+        help()
+        sys.exit(0)
+    elif sys.argv[1] == '--help':
+        help()
+        sys.exit(0)
+
     # check number of arguments
     if len(sys.argv) != 7:
         help()
         sys.exit(0)
 
-    # User check
-    if sys.argv[1] == '--user':
-        user = sys.argv[2]
-
-        if not username_check(user):
-            help()
-            sys.exit(0)
-    elif sys.argv[1] == '--help':
-        help()
-        sys.exit(0)
-
-    else:
-        help()
-        sys.exit(0)
-
-    # Adress check
-    if sys.argv[3] == '--serv':
-        
-        # try to create an ip address 
-        try:
-            ipv4 = ipaddress.ip_address(sys.argv[4])
-
-        except:
-            help()
-            sys.exit(0)
-
-        # only an ipv4 address is valid
-        if ipv4.version != 4:
-            help()
-            sys.exit(0)
-        
-        # the address must be a string
-        ipv4 = sys.argv[4]
-
-    else:
-        help()
-        sys.exit(0)
-
-    # Port check
-    if sys.argv[5] == '--port':
-        port = sys.argv[6]
-
-        # check each character of port
-        for c in port:
-            if not (ord(c) >= 48 and ord(c) <= 57):
+    # make parameters order flexible
+    check_count = 0
+    for i in range(1, 7):
+        if i == 2 or i == 4 or i == 6:
+            pass
+        # User check
+        elif sys.argv[i] == '--user':
+            user = sys.argv[i + 1]
+            check_count = check_count + 1
+            
+            if not username_check(user):
                 help()
                 sys.exit(0)
 
-        # valid port numbers for useres are from 1024 to 65535
-        if int(port) > 65535 or int(port) < 1024:
+        # Adress check
+        elif sys.argv[i] == '--serv':
+            
+            # try to create an ip address 
+            try:
+                ipv4 = ipaddress.ip_address(sys.argv[i + 1])
+                check_count = check_count + 1
+            except:
+                help()
+                sys.exit(0)
+
+            # only an ipv4 address is valid
+            if ipv4.version != 4:
+                help()
+                sys.exit(0)
+            
+            # the address must be a string
+            ipv4 = sys.argv[i + 1]
+
+        # Port check
+        elif sys.argv[i] == '--port':
+            port = sys.argv[i + 1]
+            check_count = check_count + 1
+
+            # check each character of port
+            for c in port:
+                if not (ord(c) >= 48 and ord(c) <= 57):
+                    help()
+                    sys.exit(0)
+
+            # valid port numbers for useres are from 1024 to 65535
+            if int(port) > 65535 or int(port) < 1024:
+                help()
+                sys.exit(0)    
+
+            # cast port to integer
+            port = int(port)
+
+        else:
             help()
-            sys.exit(0)    
+            sys.exit(0)
 
-        # cast port to integer
-        port = int(port)
-
+    if check_count == 3:
+        return user, ipv4, port
     else:
         help()
         sys.exit(0)
-
-    return user, ipv4, port
 
 # task 1.3
 def connection_setup(sock, user, ipv4, port):
@@ -122,7 +131,8 @@ def connection_setup(sock, user, ipv4, port):
             buffer, addr = sock.recvfrom(1400)
             break
         except:
-            if i == 2: # third timeout
+            # third timeout
+            if i == 2:
                 print('[STATUS] Connection rejected. Server does not answer.')
                 sys.exit(0)
             
