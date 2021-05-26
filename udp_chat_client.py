@@ -4,7 +4,7 @@ import struct
 import ipaddress
 import select
 
-# method to print a usage
+# Usage for the user
 def help():
     print('Usage: \n'
     + 'Command line call: \n'
@@ -14,6 +14,7 @@ def help():
     + '--serv <addr>: Hostname/IPv4 address which should look like: xxx.xxx.xxx.xxx \n'
     + '--port <port>: Port number. Only numeric characters are allowed with a maximum of 65535. \n')
 
+# check if given username is valid
 def username_check(username):
     name_length  = True
     alphanumeric = True
@@ -114,10 +115,10 @@ def starting_the_client():
 
 # task 1.3
 def connection_setup(sock, user, ipv4, port):
-    # struct.pack(...) returns a bytes object
-    CL_CON_REQ = struct.pack('!BH{}s'.format(len(user)), 1, len(user), bytes(user, encoding='utf-8'))
+    
+    CL_CON_REQ = struct.pack('!BH{}s'.format(len(user)), 1, len(user),
+                                bytes(user, encoding='utf-8'))
 
-    # timeout of four seconds
     sock.settimeout(4)
 
     for i in range(3):
@@ -125,7 +126,10 @@ def connection_setup(sock, user, ipv4, port):
         sock.sendto(CL_CON_REQ, (ipv4, port))
 
         # Textoutput of CL_CON_REQ
-        print('[STATUS] Connecting as ' + user + ' to ' + str(ipv4) + ' (' + socket.gethostbyaddr(ipv4)[0] + '): ' + str(port) + '.')
+        print('[STATUS] Connecting as ' + user
+            + ' to ' + str(ipv4) + ' (' + socket.gethostbyaddr(ipv4)[0] + '): '
+            + str(port) + '.')
+
         try:
             # receive message
             buffer, addr = sock.recvfrom(1400)
