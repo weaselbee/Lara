@@ -4,6 +4,21 @@ import struct
 import ipaddress
 import select
 
+# Message-id's:
+CL_CON_REQ_ID   = 1
+SV_CON_REP_ID   = 2
+SV_CON_AMSG_ID  = 3
+SV_PING_REQ_ID  = 4
+CL_PING_REP_ID  = 5
+SV_DISC_REP_ID  = 6
+CL_DISC_REQ_ID  = 7
+SV_DISC_AMSG_ID = 8
+CL_USER_REQ_ID  = 9
+SV_USER_REP_ID  = 10
+CL_MSG_ID       = 11
+SV_AMSG_ID      = 12
+SV_MSG_ID       = 13
+
 # Usage for the user
 def help():
     print('Usage: \n'
@@ -116,8 +131,8 @@ def starting_the_client():
 # task 1.3
 def connection_setup(sock, user, ipv4, port):
     
-    CL_CON_REQ = struct.pack('!BH{}s'.format(len(user)), 1, len(user),
-                                bytes(user, encoding='utf-8'))
+    CL_CON_REQ = struct.pack('!BH{}s'.format(len(user)), CL_CON_REQ_ID,
+                            len(user), bytes(user, encoding='utf-8'))
 
     sock.settimeout(4)
 
@@ -136,20 +151,21 @@ def connection_setup(sock, user, ipv4, port):
             break
         except:
             # third timeout
-            if i == 2:
+            if i == SV_CON_REP_ID:
                 print('[STATUS] Connection rejected. Server does not answer.')
                 sys.exit(0)
             
-    
+    msg = struct.unpack('!BB', buffer[0:2])
     # unpack the answer of the server, if the connection is accepted
-    try:
-        SV_CON_REP = struct.unpack('!BBH', buffer)
-    except:
+    if msg[1] == 0 and msg[0] == SV_CON_REP_ID:
         print('[STATUS] Connection rejected by server.')
         sys.exit(0)
 
+    if msg[0] == SV_CON_REP_ID:
+        SV_CON_REP = struct.unpack('!BBH', buffer)
+
     # server detected error
-    if SV_CON_REP[1] == 13:
+    if msg[0] == SV_MSG_ID:
         msg_len  = struct.unpack('!I', buffer[1:5])[0]
         msg      = struct.unpack('!{}s'.format(msg_len), buffer[5:])[0]
         print('[SERVER] ' + msg.decode(encoding='utf-8'))
@@ -159,7 +175,7 @@ def connection_setup(sock, user, ipv4, port):
     print('[STATUS] Connection accepted. Please use port ' + str(new_port) + ' for further communication.')
 
     # send a first ping because the server needs a first message
-    CL_PING_REP = struct.pack('!B', 5)
+    CL_PING_REP = struct.pack('!B', CL_PING_REP_ID)
     sock.sendto(CL_PING_REP, (ipv4, new_port))
   
     return new_port
@@ -167,34 +183,35 @@ def connection_setup(sock, user, ipv4, port):
 #task 1.4
 def connection_monitoring(sock, ipv4, new_port):
     sock.settimeout(3 * 4)
-    CL_PING_REP = struct.pack('!B', 5)
+    CL_PING_REP = struct.pack('!B', CL_PING_REP_ID)
     buffer, addr = sock.recvfrom(1400)
     
     # unpack the received message to get the message type
     id = struct.unpack('!B', buffer[0:1])[0]
 
     # an other user connected to the chat
-    if id == 3:
+    if id == SV_CON_AMSG_ID:
         usr_len  = struct.unpack('!H', buffer[1:3])[0]
         usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
         print('[CHAT] Hi, my name is <' + usr_name.decode(encoding='utf-8') + '>!')
 
     # the server sent a ping and expects ping as answer
-    if id == 4:
+    if id == SV_PING_REQ_ID:
         sock.sendto(CL_PING_REP, (ipv4, new_port))
 
     # the client lost the connection to the server and gets removed
-    if id == 6:
+    if id == SV_DISC_REP_ID:
         print('[STATUS] Lost connection to the server. Timeout.')
+        sys.exit(0)
 
     # an user left the chat with '/disconnect'
-    if id == 8:
+    if id == SV_DISC_AMSG_ID:
         usr_len  = struct.unpack('!H', buffer[1:3])[0]
         usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:])[0]
         print('[CHAT] <' + usr_name.decode(encoding='utf-8') + '> left the chat.')
 
     # receive messages from other useres to chat
-    if id == 12:
+    if id == SV_AMSG_ID:
         usr_len  = struct.unpack('!H', buffer[1:3])[0]
         usr_name = struct.unpack('!{}s'.format(usr_len), buffer[3:(3 + usr_len)])[0] 
         msg_len  = struct.unpack('!I', buffer[(3 + usr_len):(3 + usr_len + 4)])[0]
@@ -202,14 +219,14 @@ def connection_monitoring(sock, ipv4, new_port):
         print('[CHAT] <' + usr_name.decode(encoding='utf-8') + '>: ' + msg.decode(encoding='utf-8'))
 
     # server detected error
-    if id == 13:
+    if id == SV_MSG_ID:
         msg_len  = struct.unpack('!I', buffer[1:5])[0]
         msg      = struct.unpack('!{}s'.format(msg_len), buffer[5:])[0]
         print('[SERVER] ' + msg.decode(encoding='utf-8'))
 
 # task 1.5
 def connection_teardown(sock, ipv4, new_port):        
-    CL_DISC_REQ = struct.pack('!B', 7)
+    CL_DISC_REQ = struct.pack('!B', CL_DISC_REQ_ID)
     
     # timeout of five seconds
     sock.settimeout(5)
@@ -223,10 +240,10 @@ def connection_teardown(sock, ipv4, new_port):
 
         if buffer:
             id = struct.unpack('!B', buffer[0:1])[0]
-            if id == 6:
+            if id == SV_DISC_REP_ID:
                 print('[STATUS] Connection was terminated successfully.')
                 sys.exit(0)
-            if i == 2:
+            if i == SV_CON_REP_ID:
                 print('[STATUS] Could not tear down the connection. Timeout.')
                 sys.exit(0)
 
@@ -234,7 +251,9 @@ def connection_teardown(sock, ipv4, new_port):
 def user_query(sock, ipv4, new_port, name):
 
     # username the user asked for
-    CL_USER_REQ = struct.pack('!BH{}s'.format(len(name)), 9, len(name), bytes(name, encoding='utf-8'))
+    CL_USER_REQ = struct.pack('!BH{}s'.format(len(name)), CL_USER_REQ_ID,
+                              len(name), bytes(name, encoding='utf-8'))
+
     sock.sendto(CL_USER_REQ, (ipv4, new_port))
     print('[STATUS] Asking for availability of ' + name + '.')
     buffer, addr = sock.recvfrom(1400)
@@ -243,16 +262,15 @@ def user_query(sock, ipv4, new_port, name):
     SV_USER_REP = struct.unpack('!BB', buffer[0:2])
     
     # the username is not connected to the server
-    if SV_USER_REP[1] == 0 and SV_USER_REP[0] == 10:
+    if SV_USER_REP[1] == 0 and SV_USER_REP[0] == SV_USER_REP_ID:
         print('[STATUS] User', name, 'was not found on this server.')
     
     # the username is connected
-    elif SV_USER_REP[1] == 1 and SV_USER_REP[0] == 10:
-        name_len = struct.unpack('!H', buffer[2:4])[0]
+    elif SV_USER_REP[1] == 1 and SV_USER_REP[0] == SV_USER_REP_ID:
+        name_len  = struct.unpack('!H', buffer[2:4])[0]
         user_name = struct.unpack('!H{}s'.format(name_len), buffer[2:])
         user_name = user_name[1]
         print('[STATUS] User', user_name.decode(encoding='utf-8'), 'is here!')
-
 
 
 def main():
@@ -314,7 +332,7 @@ def main():
                     # chat message
                     else:
                         if sys.getsizeof(data) <= 1400:
-                            CL_MSG = struct.pack('!BI{}s'.format(len(data)), 11, len(data), bytes(data, encoding='utf-8'))
+                            CL_MSG = struct.pack('!BI{}s'.format(len(data)), CL_MSG_ID, len(data), bytes(data, encoding='utf-8'))
                             sock.sendto(CL_MSG, (ipv4, new_port))
                         else:
                             print('[WARNING] Message is too big.')
