@@ -2,7 +2,6 @@ import sys
 import socket
 import struct
 import ipaddress
-import socketserver
 import select
 
 # method to print a usage
@@ -40,7 +39,7 @@ def starting_the_client():
     # check number of arguments
     if len(sys.argv) != 7:
         help()
-        sys.exit(-1)
+        sys.exit(0)
 
     # User check
     if sys.argv[1] == '--user':
@@ -48,14 +47,14 @@ def starting_the_client():
 
         if not username_check(user):
             help()
-            sys.exit(-1)
+            sys.exit(0)
     elif sys.argv[1] == '--help':
         help()
-        sys.exit(-1)
+        sys.exit(0)
 
     else:
         help()
-        sys.exit(-1)
+        sys.exit(0)
 
     # Adress check
     if sys.argv[3] == '--serv':
@@ -66,19 +65,19 @@ def starting_the_client():
 
         except:
             help()
-            sys.exit(-1)
+            sys.exit(0)
 
         # only an ipv4 address is valid
         if ipv4.version != 4:
             help()
-            sys.exit(-1)
+            sys.exit(0)
         
         # the address must be a string
         ipv4 = sys.argv[4]
 
     else:
         help()
-        sys.exit(-1)
+        sys.exit(0)
 
     # Port check
     if sys.argv[5] == '--port':
@@ -88,19 +87,19 @@ def starting_the_client():
         for c in port:
             if not (ord(c) >= 48 and ord(c) <= 57):
                 help()
-                sys.exit(-1)
+                sys.exit(0)
 
         # valid port numbers for useres are from 1024 to 65535
         if int(port) > 65535 or int(port) < 1024:
             help()
-            sys.exit(-1)    
+            sys.exit(0)    
 
         # cast port to integer
         port = int(port)
 
     else:
         help()
-        sys.exit(-1)
+        sys.exit(0)
 
     return user, ipv4, port
 
@@ -133,11 +132,11 @@ def connection_setup(sock, user, ipv4, port):
         SV_CON_REP = struct.unpack('!BBH', buffer)
     except:
         print('[STATUS] Connection rejected by server.')
-        sys.exit(-1)
+        sys.exit(0)
 
     # if SV_CON_REP[1] == 0:
     #     print('[STATUS] Connection rejected by server.')
-    #     sys.exit(-1)
+    #     sys.exit(0)
 
     # server detected error
     if SV_CON_REP[1] == 13:
@@ -216,10 +215,10 @@ def connection_teardown(sock, ipv4, new_port):
             id = struct.unpack('!B', buffer[0:1])[0]
             if id == 6:
                 print('[STATUS] Connection was terminated successfully.')
-                sys.exit(-1)
+                sys.exit(0)
         if i == 2:
             print('[STATUS] Could not tear down the connection. Timeout.')
-            sys.exit(-1)
+            sys.exit(0)
 
 # task 1.6
 def user_query(sock, ipv4, new_port, name):
@@ -251,60 +250,64 @@ def main():
     user, ipv4, port = starting_the_client()
 
     # create UDP socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
 
-    #try:
-    new_port = connection_setup(sock, user, ipv4, port)
-    #except:
-    #    sys.exit(-1)
-    
-    
+        #try:
+        new_port = connection_setup(sock, user, ipv4, port)
+        #except:
+        #    sys.exit(0)
+        
+        while True:
 
-    while True:
-        read_descriptor = []
-        read_descriptor.append(sock.fileno())
-        read_descriptor.append(sys.stdin.fileno())
+            # descriptors for select()
+            read_descriptor = []
+            read_descriptor.append(sock.fileno())
+            read_descriptor.append(sys.stdin.fileno())
+            write_descriptor = []
+            exceptions_descriptor = []
 
-        write_descriptor = []
-        exceptions_descriptor = []
-        in_ready, out_ready, except_ready = select.select(read_descriptor,
-                                                          write_descriptor,
-                                                          exceptions_descriptor)
+            # call select()
+            in_ready, out_ready, except_ready = select.select(read_descriptor,
+                                                            write_descriptor,
+                                                            exceptions_descriptor)
 
-        for a in in_ready:
-            if a is sock.fileno(): 
-                connection_monitoring(sock, ipv4, new_port)
-            
-            if a is sys.stdin.fileno():
-                data = input()
-                if data[0] == '/':
-                    if data == '/disconnect':
-                        connection_teardown(sock, ipv4, new_port)
+            for a in in_ready:
+                if a is sock.fileno(): 
+                    connection_monitoring(sock, ipv4, new_port)
+                
+                if a is sys.stdin.fileno():
+                    data = input()
+
+                    # no input
+                    if data == '':
+                        break
+
+                    # commands
+                    if data[0] == '/':
+                        if data == '/disconnect':
+                            connection_teardown(sock, ipv4, new_port)
+                        else:
+                            try:
+                                data = data.split(' ')
+                                search = data[0]
+                                name   = data[1]
+                                
+                                # command to ask for other users on the server
+                                if search == '/search':
+                                    if username_check(name):
+                                        user_query(sock, ipv4, new_port, name)
+                                    else:
+                                        print('[WARNING] Invalid username was entered.')
+                            except:
+                                # ignore invalid commands
+                                pass
+                    # chat message
                     else:
-                        try:
-                            data = data.split(' ')
-                            search = data[0]
-                            name   = data[1]
-                            
-                            # command to ask for other users on the server
-                            if search == '/search':
-                                if username_check(name):
-                                    user_query(sock, ipv4, new_port, name)
-                                else:
-                                    print('[WARNING] Invalid username was entered.')
-                        except:
-                            # ignore invalid commands
-                            pass
-                else:
-                    # message to the chat
-                    if sys.getsizeof(data) <= 1400:
-                        CL_MSG = struct.pack('!BI{}s'.format(len(data)), 11, len(data), bytes(data, encoding='utf-8'))
-                        sock.sendto(CL_MSG, (ipv4, new_port))
-                    else:
-                        print('[WARNING] Message is too big.')
-    # HIER WEITER MACHEN LARA!!!! nicht nach dem CLOSE!!!
-    sock.close()
-
+                        if sys.getsizeof(data) <= 1400:
+                            CL_MSG = struct.pack('!BI{}s'.format(len(data)), 11, len(data), bytes(data, encoding='utf-8'))
+                            sock.sendto(CL_MSG, (ipv4, new_port))
+                        else:
+                            print('[WARNING] Message is too big.')
     
 if __name__ == '__main__':
     main()
