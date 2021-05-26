@@ -134,10 +134,6 @@ def connection_setup(sock, user, ipv4, port):
         print('[STATUS] Connection rejected by server.')
         sys.exit(0)
 
-    # if SV_CON_REP[1] == 0:
-    #     print('[STATUS] Connection rejected by server.')
-    #     sys.exit(0)
-
     # server detected error
     if SV_CON_REP[1] == 13:
         msg_len  = struct.unpack('!I', buffer[1:5])[0]
@@ -216,9 +212,9 @@ def connection_teardown(sock, ipv4, new_port):
             if id == 6:
                 print('[STATUS] Connection was terminated successfully.')
                 sys.exit(0)
-        if i == 2:
-            print('[STATUS] Could not tear down the connection. Timeout.')
-            sys.exit(0)
+            if i == 2:
+                print('[STATUS] Could not tear down the connection. Timeout.')
+                sys.exit(0)
 
 # task 1.6
 def user_query(sock, ipv4, new_port, name):
@@ -252,10 +248,7 @@ def main():
     # create UDP socket
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
 
-        #try:
         new_port = connection_setup(sock, user, ipv4, port)
-        #except:
-        #    sys.exit(0)
         
         while True:
 
@@ -272,9 +265,12 @@ def main():
                                                             exceptions_descriptor)
 
             for a in in_ready:
+
+                # socket handling
                 if a is sock.fileno(): 
                     connection_monitoring(sock, ipv4, new_port)
                 
+                # input
                 if a is sys.stdin.fileno():
                     data = input()
 
