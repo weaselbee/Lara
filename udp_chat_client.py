@@ -238,7 +238,6 @@ def connection_teardown(sock, ipv4, new_port):
     # timeout of five seconds
     sock.settimeout(5)
 
-    # try 2 times, otherwise the teardown failed
     for i in range(3):
         sock.sendto(CL_DISC_REQ, (ipv4, new_port))
 
@@ -250,6 +249,8 @@ def connection_teardown(sock, ipv4, new_port):
             if id == SV_DISC_REP_ID:
                 print('[STATUS] Connection was terminated successfully.')
                 sys.exit(0)
+
+            # third timeout
             if i == 2:
                 print('[STATUS] Could not tear down the connection. Timeout.')
                 sys.exit(0)
