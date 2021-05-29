@@ -134,6 +134,13 @@ def connection_setup(sock, user, ipv4, port):
     CL_CON_REQ = struct.pack('!BH{}s'.format(len(user)), CL_CON_REQ_ID,
                             len(user), bytes(user, encoding='utf-8'))
 
+
+    try:
+        hostname = socket.gethostbyaddr(ipv4)[0]
+    except:
+        print('[WARNING] Invalid hostname.')
+
+    #timeout
     sock.settimeout(4)
 
     for i in range(3):
@@ -142,27 +149,31 @@ def connection_setup(sock, user, ipv4, port):
 
         # Textoutput of CL_CON_REQ
         print('[STATUS] Connecting as ' + user
-            + ' to ' + str(ipv4) + ' (' + socket.gethostbyaddr(ipv4)[0] + '): '
+            + ' to ' + str(ipv4) + ' (' + hostname + '): '
             + str(port) + '.')
 
         try:
-            # receive message
             buffer, addr = sock.recvfrom(1400)
+
+            # break the loop on connection success
             break
         except:
             # third timeout
-            if i == SV_CON_REP_ID:
+            if i == 2:
                 print('[STATUS] Connection rejected. Server does not answer.')
                 sys.exit(0)
             
     msg = struct.unpack('!BB', buffer[0:2])
-    # unpack the answer of the server, if the connection is accepted
+
+    # the answer is 0, the connection is rejected
     if msg[1] == 0 and msg[0] == SV_CON_REP_ID:
         print('[STATUS] Connection rejected by server.')
         sys.exit(0)
 
+    # the answer is not 0 and no timeout -> the whole msg was sent
     if msg[0] == SV_CON_REP_ID:
         SV_CON_REP = struct.unpack('!BBH', buffer)
+        new_port = SV_CON_REP[2]
 
     # server detected error
     if msg[0] == SV_MSG_ID:
@@ -170,19 +181,15 @@ def connection_setup(sock, user, ipv4, port):
         msg      = struct.unpack('!{}s'.format(msg_len), buffer[5:])[0]
         print('[SERVER] ' + msg.decode(encoding='utf-8'))
     
-    new_port = SV_CON_REP[2]
-
     print('[STATUS] Connection accepted. Please use port ' + str(new_port) + ' for further communication.')
-
-    # send a first ping because the server needs a first message
-    CL_PING_REP = struct.pack('!B', CL_PING_REP_ID)
-    sock.sendto(CL_PING_REP, (ipv4, new_port))
   
     return new_port
 
-#task 1.4
+# task 1.4
 def connection_monitoring(sock, ipv4, new_port):
+    # the server sends keepalives every 3 seconds and loses the connection if a 4th keepalive is sent (3 * 4) 
     sock.settimeout(3 * 4)
+
     CL_PING_REP = struct.pack('!B', CL_PING_REP_ID)
     buffer, addr = sock.recvfrom(1400)
     
@@ -243,7 +250,7 @@ def connection_teardown(sock, ipv4, new_port):
             if id == SV_DISC_REP_ID:
                 print('[STATUS] Connection was terminated successfully.')
                 sys.exit(0)
-            if i == SV_CON_REP_ID:
+            if i == 2:
                 print('[STATUS] Could not tear down the connection. Timeout.')
                 sys.exit(0)
 
@@ -282,6 +289,10 @@ def main():
 
         new_port = connection_setup(sock, user, ipv4, port)
         
+        # send a ping because the server needs a first message
+        CL_PING_REP = struct.pack('!B', CL_PING_REP_ID)
+        sock.sendto(CL_PING_REP, (ipv4, new_port))
+
         while True:
 
             # descriptors for select()
@@ -302,7 +313,7 @@ def main():
                 if a is sock.fileno(): 
                     connection_monitoring(sock, ipv4, new_port)
                 
-                # input
+                # input handling
                 if a is sys.stdin.fileno():
                     data = input()
 
