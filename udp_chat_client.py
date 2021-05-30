@@ -50,7 +50,7 @@ def username_check(username):
     else:
         return False
 
-# task 1.2
+# get the username, ipv4 adress and the port to connect to the server (task 1.2)
 def starting_the_client():
 
     # no user input or user looks for help
@@ -128,7 +128,7 @@ def starting_the_client():
         help()
         sys.exit(0)
 
-# task 1.3
+# setup the connection to the server (task 1.3)
 def connection_setup(sock, user, ipv4, port):
     
     CL_CON_REQ = struct.pack('!BH{}s'.format(len(user)), CL_CON_REQ_ID,
@@ -138,7 +138,8 @@ def connection_setup(sock, user, ipv4, port):
     try:
         hostname = socket.gethostbyaddr(ipv4)[0]
     except:
-        print('[WARNING] Invalid hostname.')
+        hostname = 'unknown'
+        print('[WARNING] Unknown hostname.')
 
     #timeout
     sock.settimeout(4)
@@ -147,7 +148,6 @@ def connection_setup(sock, user, ipv4, port):
         # send message
         sock.sendto(CL_CON_REQ, (ipv4, port))
 
-        # Textoutput of CL_CON_REQ
         print('[STATUS] Connecting as ' + user
             + ' to ' + str(ipv4) + ' (' + hostname + '): '
             + str(port) + '.')
@@ -185,7 +185,7 @@ def connection_setup(sock, user, ipv4, port):
   
     return new_port
 
-# task 1.4
+# print the messages, the server sent to the client (task 1.4)
 def connection_monitoring(sock, ipv4, new_port):
     # the server sends keepalives every 3 seconds and loses the connection if a 4th keepalive is sent (3 * 4) 
     sock.settimeout(3 * 4)
@@ -231,7 +231,7 @@ def connection_monitoring(sock, ipv4, new_port):
         msg      = struct.unpack('!{}s'.format(msg_len), buffer[5:])[0]
         print('[SERVER] ' + msg.decode(encoding='utf-8'))
 
-# task 1.5
+# disconnect from the server (task 1.5)
 def connection_teardown(sock, ipv4, new_port):        
     CL_DISC_REQ = struct.pack('!B', CL_DISC_REQ_ID)
     
@@ -255,7 +255,7 @@ def connection_teardown(sock, ipv4, new_port):
                 print('[STATUS] Could not tear down the connection. Timeout.')
                 sys.exit(0)
 
-# task 1.6
+# look for online users (task 1.6)
 def user_query(sock, ipv4, new_port, name):
 
     # username the user asked for
@@ -279,7 +279,6 @@ def user_query(sock, ipv4, new_port, name):
         user_name = struct.unpack('!H{}s'.format(name_len), buffer[2:])
         user_name = user_name[1]
         print('[STATUS] User', user_name.decode(encoding='utf-8'), 'is here!')
-
 
 def main():
 
